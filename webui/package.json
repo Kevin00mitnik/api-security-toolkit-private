@@ -2,6 +2,7 @@
   "name": "api-security-toolkit-webui",
   "private": true,
   "version": "1.0.0",
+  "author": "Mohammed Arif Pallath",
   "type": "module",
   "description": "Dashboard for the API Security Assessment Toolkit. Talks to the local Flask API only.",
   "scripts": {

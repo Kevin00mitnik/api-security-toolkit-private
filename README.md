@@ -1,5 +1,7 @@
 # API Security Assessment Toolkit
 
+**Project owner and maintainer:** Mohammed Arif Pallath
+
 A modular Python and React security assessment project designed for **APIs you own or have explicit authorization to assess**. The toolkit executes controlled, non-destructive security checks and produces comprehensive dark-themed HTML reports, Markdown summaries, and sanitized, minimized JSON evidence.
 
 > **Responsible Use Notice:** Only test systems you own or have explicit authorization to assess. This toolkit is designed for learning, defense, and authorized pre-audit validation—not unauthorized attacks or destructive exploitation.
