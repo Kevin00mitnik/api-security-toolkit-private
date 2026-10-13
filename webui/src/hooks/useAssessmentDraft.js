@@ -10,7 +10,7 @@ export const cleanDraft = {
   target: "",
   openapiText: "",
   openapiName: "",
-  authScheme: "bearer",
+  authScheme: "none",
   primaryHeader: "X-API-Key",
   primaryUsername: "",
   primaryToken: "",

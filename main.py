@@ -146,7 +146,6 @@ def _applicability(args, endpoints, auth_available, bola):
         reasons["cors_analysis"] = "No target supplied"
     else:
         if not auth_available:
-            reasons["cors_analysis"] = "No authenticated identity available for the credentialed CORS check"
             if not any(auth_analysis.requires_auth(ep.security) for ep in endpoints):
                 reasons["auth_analysis"] = "No authenticated identity available"
     if not (args.bola and bola):
@@ -225,7 +224,7 @@ def run(args, progress=None, selected=None):
         findings = [f for f in findings if f.category != "OpenAPI"]
     emit(progress, "endpoint_discovery", endpoints=len(endpoints))
     if not endpoints and args.target:
-        endpoints = [Endpoint("/api/public")]
+        endpoints = [Endpoint("/")]
     if len(endpoints) > 100:
         raise ValueError("At most 100 documented endpoints are accepted per run")
     config, identities, secrets = load_config(args.config)

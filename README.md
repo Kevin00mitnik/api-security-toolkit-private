@@ -196,9 +196,9 @@ python -m pytest -q
 ### Option A: Using the Web Dashboard (Recommended)
 
 1. Open **http://127.0.0.1:5055/**.
-2. **Card 1 (Target API):** Enter the authorized target URL (e.g., `http://127.0.0.1:5000`). Check the authorization confirmation checkbox.
-3. **Card 2 (API Specification):** Paste your OpenAPI specification (or click **Load Sample Spec** to load `input/openapi.json`).
-4. **Card 3 (Authentication):** Select **Bearer Token** and paste your primary token (e.g., contents of `.local/alice.token`).
+2. **Card 1 (Target API):** For an unauthenticated black-box check, enter a domain (tests `/`) or one endpoint URL (tests only that path), such as `https://api.example.com/v1/status`. Check the authorization confirmation checkbox. Remote targets must use HTTPS and you must be authorized to assess them.
+3. **Card 2 (API Specification):** Optional for URL-only checks. Paste an OpenAPI specification (or click **Load Sample Spec**) to assess its documented endpoints, or enter an explicit endpoint list. A target URL with a path cannot be combined with a spec/list.
+4. **Card 3 (Authentication):** Leave **None** selected for anonymous testing. Credentials are optional; authenticated comparisons require credentials and documented protected endpoints.
 5. **Card 4 (Security Tests):** Keep the default **Recommended tests** selection.
 6. **Advanced Options (Optional):**
    - **BOLA Configuration:** Enter Object Path `/api/objects/101`, Identity Path `/api/me`, Secondary Token (Bob), Expected ID `101`, ID Field `id`, Owner Field `owner`.
