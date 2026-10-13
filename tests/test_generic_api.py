@@ -187,6 +187,11 @@ def test_api_key_identity_in_engine_config(tmp_path):
 def public_api():
     """A completely public API requiring no credentials."""
     app = Flask("public-api")
+    authorization_headers = []
+
+    @app.before_request
+    def record_authorization_header():
+        authorization_headers.append(request.headers.get("Authorization"))
 
     @app.get("/api/status")
     def status():
@@ -199,19 +204,20 @@ def public_api():
     server = make_server("127.0.0.1", 0, app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield "http://127.0.0.1:" + str(server.server_port)
+    yield "http://127.0.0.1:" + str(server.server_port), authorization_headers
     server.shutdown()
     thread.join(timeout=3)
     server.server_close()
 
 
 def test_public_api_assessment_without_auth(tmp_path, public_api):
+    public_api_url, _ = public_api
     jobs_root = tmp_path / "jobs"
     app = create_app(root=str(jobs_root))
     client = app.test_client()
 
     payload = {
-        "target": public_api,
+        "target": public_api_url,
         "endpoints_text": json.dumps(["/api/status", "/api/info"]),
         "tests": ["endpoint_discovery", "parameter_discovery", "headers_analysis",
                   "method_analysis", "auth_analysis", "cors_analysis"],
@@ -225,9 +231,9 @@ def test_public_api_assessment_without_auth(tmp_path, public_api):
     coverage = client.get(f"/api/assessment/{job_id}/coverage").get_json()["coverage"]
     assert "headers_analysis" in coverage["tests_executed"]
     assert "method_analysis" in coverage["tests_executed"]
-    # Auth and credentialed CORS checks are skipped gracefully because no identity was provided
+    # Authentication comparison is skipped without a credential; CORS is tested anonymously.
     assert "auth_analysis" in coverage["tests_skipped"]
-    assert "cors_analysis" in coverage["tests_skipped"]
+    assert "cors_analysis" in coverage["tests_executed"]
     assert "No authenticated identity available" in coverage["skip_reasons"]["auth_analysis"]
     assert coverage["tests_failed"] == []
 
@@ -235,6 +241,37 @@ def test_public_api_assessment_without_auth(tmp_path, public_api):
     for path in (f"/api/assessment/{job_id}/evidence.json", f"/api/assessment/{job_id}/report/html"):
         res = client.get(path)
         assert res.status_code == 200
+
+
+@pytest.mark.parametrize("path,expected_path", [
+    ("/api/status", "/api/status"),
+    ("", "/"),
+])
+def test_url_only_black_box_assessment_uses_only_the_supplied_path(
+    tmp_path, public_api, path, expected_path
+):
+    base_url, authorization_headers = public_api
+    app = create_app(root=str(tmp_path / "jobs"))
+    client = app.test_client()
+    payload = {
+        "target": base_url + path,
+        "tests": ["endpoint_discovery", "parameter_discovery", "headers_analysis",
+                  "method_analysis", "auth_analysis", "cors_analysis"],
+    }
+
+    created = client.post("/api/assessment/start", json=payload, headers=session_headers(app))
+    assert created.status_code == 202
+    job_id = created.get_json()["job_id"]
+    job = wait_for(client, job_id)
+    assert job["status"] == COMPLETED, job.get("error")
+    assert job["summary"]["endpoints_total"] == 1
+
+    endpoints = client.get(f"/api/assessment/{job_id}/endpoints").get_json()["endpoints"]
+    assert [endpoint["path"] for endpoint in endpoints] == [expected_path]
+    coverage = client.get(f"/api/assessment/{job_id}/coverage").get_json()["coverage"]
+    assert "cors_analysis" in coverage["tests_executed"]
+    assert "auth_analysis" in coverage["tests_skipped"]
+    assert authorization_headers and all(value is None for value in authorization_headers)
 
 
 # --------------------------------------------------- Bearer-Protected API
@@ -460,4 +497,3 @@ def test_api_returning_non_json_and_errors(tmp_path, non_json_and_error_api):
     assert coverage["requests_sent"] > 0
     # Stop reason recorded gracefully on 500
     assert "Stopped after HTTP 429 or server error" in (coverage.get("stop_reason") or "")
-

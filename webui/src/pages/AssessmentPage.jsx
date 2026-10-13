@@ -204,9 +204,6 @@ export default function AssessmentPage() {
     if (trimmed && /^http:\/\//i.test(trimmed) && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])/i.test(trimmed)) {
       list.push("Non-loopback targets must use HTTPS.");
     }
-    if (!openapiText.trim() && !endpointsText.trim()) {
-      list.push("Provide an OpenAPI specification or enter endpoints so the toolkit knows what to assess.");
-    }
     if (openapiText.trim()) {
       const openapiTrimmed = openapiText.trim();
       const isUrl = /^https?:\/\//i.test(openapiTrimmed);
@@ -229,6 +226,19 @@ export default function AssessmentPage() {
         }
       } catch {
         list.push("Endpoint list must be valid JSON.");
+      }
+    }
+    if (trimmed && /^https?:\/\//i.test(trimmed)) {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+          list.push("Target URL cannot contain credentials, a query, or a fragment.");
+        }
+        if ((openapiText.trim() || endpointsText.trim()) && parsed.pathname !== "/") {
+          list.push("Use the target origin only when supplying an OpenAPI specification or endpoint list.");
+        }
+      } catch {
+        list.push("Enter a valid target URL.");
       }
     }
     if (!acknowledged) list.push("Confirm you have explicit authorization for this target.");
@@ -439,10 +449,10 @@ export default function AssessmentPage() {
           {/* Card 1: Target API */}
           <StepCard
             step="1"
-            title="Target API URL"
-            description="Origin only. HTTP for loopback/lab; remote targets require HTTPS."
+            title="Target API URL (black-box)"
+            description="Use a domain to assess its root path, or include one API route. HTTPS and authorization confirmation are required for remote targets."
           >
-            <Field htmlFor="target" hint="Example: https://api.example.com or http://127.0.0.1:8000">
+            <Field htmlFor="target" hint="Example: https://api.example.com or https://api.example.com/v1/status">
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-mono select-none">
                   URL
@@ -452,7 +462,7 @@ export default function AssessmentPage() {
                   className="field-input pl-10 text-xs font-mono py-1.5"
                   value={target}
                   onChange={(event) => update((prev) => ({ ...prev, target: event.target.value }))}
-                  placeholder="https://api.example.com"
+                  placeholder="https://api.example.com/v1/status"
                   spellCheck={false}
                   autoComplete="off"
                 />
@@ -464,7 +474,7 @@ export default function AssessmentPage() {
           <StepCard
             step="2"
             title="API Specification & Endpoints"
-            description="The engine never crawls or guesses paths. Supply OpenAPI JSON or enter endpoints."
+            description="Optional. Without a spec or endpoint list, only the URL's path is tested (or / for a domain). No crawling or path guessing."
           >
             <div className="space-y-2.5">
               {/* OpenAPI upload or paste */}
@@ -535,9 +545,7 @@ export default function AssessmentPage() {
                 <div className="flex items-center justify-between mb-1">
                   <label className="field-label mb-0 text-xs" htmlFor="endpoints">
                     Endpoint List{" "}
-                    {!openapiText.trim() && (
-                      <span className="text-accent-strong font-normal">(needed if no spec)</span>
-                    )}
+                    <span className="text-slate-500 font-normal">(optional)</span>
                   </label>
                 </div>
                 <textarea
@@ -551,7 +559,7 @@ export default function AssessmentPage() {
                 />
                 {!openapiText.trim() && !endpointsText.trim() && (
                   <p className="mt-1 text-[10px] text-medium">
-                    ⚠️ Provide an OpenAPI document or enter endpoints above so the toolkit knows what to assess.
+                    URL-only mode tests one GET path without credentials; provide a spec or paths above to assess more endpoints.
                   </p>
                 )}
               </div>
@@ -565,7 +573,7 @@ export default function AssessmentPage() {
           <StepCard
             step="3"
             title="Authentication Scheme"
-            description="Used for this assessment only. Never stored in browser storage, logs, or reports."
+            description="Optional. Anonymous black-box checks need no credentials; supplied credentials are used only for this assessment."
           >
             {/* Scheme pills */}
             <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -583,7 +591,7 @@ export default function AssessmentPage() {
 
             {authScheme === "none" ? (
               <p className="text-xs leading-relaxed text-info border border-line rounded-lg px-3 py-2 bg-surface/30">
-                Anonymous mode: no credentials sent. Authentication checks will report as skipped with a clear reason.
+                Anonymous mode: no credentials are sent. Authentication comparison is skipped; public endpoint, headers, methods, and CORS checks can still run.
               </p>
             ) : (
               <div className="space-y-2">

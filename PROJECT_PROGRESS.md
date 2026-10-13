@@ -18,14 +18,16 @@ Updated: 2026-10-09. This is the authoritative handoff; it supersedes older phas
 | — | Advanced options | **Collapsed by default** (`aria-expanded`, `aria-controls`): individual test selection, second credential, endpoint list, BOLA case, rate-limit sample, JWT to inspect |
 | — | Start card | Validation messages, the authorization acknowledgement, `N of 10 tests selected · mode`, Start button |
 
-**Recommended vs custom.** "Recommended tests" is the default and is computed from the settings above: the seven checks that never need a secret are always included, and `auth_analysis`, `authorization` (BOLA) and `jwt_analysis` are added automatically only when the operator has supplied the credential/token they require. Target-side applicability is **still decided by the engine's capability detection** — unsupported tests come back `skipped` with a reason (observed: `openapi_analysis — No OpenAPI/Swagger document was supplied`, `cors_analysis — No authenticated identity available for the credentialed CORS check`). Choosing an individual test switches to a custom selection and opens Advanced options; "Use recommended tests" switches back. The request payload shape is unchanged.
+**URL-only black-box assessments.** Authentication defaults to **None**. Entering a domain tests only `/`; entering a URL with a path tests only that path. No OpenAPI document, endpoint list, or login credential is needed for those bounded checks. Anonymous CORS observations are supported. No crawling or path guessing occurs. Remote targets still require HTTPS and explicit authorization confirmation.
+
+**Recommended vs custom.** "Recommended tests" is the default and selects the six checks that do not require an identity or a manually configured path. `auth_analysis`, `authorization` (BOLA) and `jwt_analysis` are included only when the operator supplies their required credentials/configuration. Capability detection reports unsupported checks as skipped with a reason (for example, `openapi_analysis — No OpenAPI/Swagger document was supplied`). Choosing an individual test switches to a custom selection and opens Advanced options; "Use recommended tests" switches back.
 
 ## What "generic" means now (and what is honestly still limited)
 
 | Requirement | Implementation | Verified |
 |---|---|---|
 | Arbitrary authorized target | `--target` / web `target` accepts any `http(s)://host[:port]`; non-loopback still requires the authorization acknowledgement + HTTPS. No lab host is hard-coded. | Second-API test + lab tests |
-| Endpoint discovery | Supplied OpenAPI/Swagger or an explicit endpoint list (max 100). When a target is given but no endpoints, one safe default (`/api/public`) is used. **No crawling or guessing.** | `test_generic_api.py`, `test_web_modules.py` |
+| Endpoint discovery | Supplied OpenAPI/Swagger, explicit endpoint list (max 100), or exactly one GET path from the URL (default `/`). **No crawling or guessing.** | `test_generic_api.py`, `test_web_modules.py` |
 | Capability detection | `main._applicability()` decides before running; inapplicable selected tests are skipped with a plain reason. | `test_inapplicable_tests_are_skipped_with_reasons`, `test_target_only_tests_are_skipped_without_a_target` |
 | Test status | Every selected test records `passed` / `finding` / `skipped` / `failed` (+ `findings` count + `reason`). A module that raises is isolated and marked `failed`, not aborted. | Coverage `tests[]`, UI + report |
 | Authentication | Identity schemes: **Bearer/JWT, API key header, Basic auth, custom header.** Backward compatible with the old bare-token form. | `test_second_api_with_api_key_auth`, `test_api_key_identity_in_engine_config` |
@@ -92,15 +94,15 @@ Both runs exercised the collapsed-by-default Advanced panel (expanded before fil
 | Flow | Result |
 |---|---|
 | Beginner / quick path | Fresh load → only one validation message (authorization) → tick the acknowledgement → **Start enabled** with `Ready — 7 tests selected` → Progress 100% → Results (`7 selected / 5 executed / 2 skipped / 0 failed`, 6 requests) → Findings (2 rows) → Reports (HTML/Markdown/JSON + downloads) |
-| Capability-skip evidence | The same run's coverage table: `cors_analysis — skipped — No authenticated identity available for the credentialed CORS check`, `openapi_analysis — skipped — No OpenAPI/Swagger document was supplied` |
+| Capability-skip evidence | Authentication comparison and OpenAPI analysis are skipped with explicit reasons when no credentials/spec are supplied; anonymous CORS runs against the supplied endpoint. |
 | Advanced path | "Choose tests individually" → Advanced opens + custom mode (`Custom selection: 7 of 10`) → all **10** test checkboxes and all six groups (test selection, second credential, endpoint list, BOLA case, rate-limit sample, JWT) present → primary token typed → switch back to Recommended → `8 of 10` → second credential + JWT typed → `10 of 10` → Start → completed run with 9 executed / 1 skipped / 0 failed |
 | Layout | Default (Advanced collapsed) content height ≈ 950 px → fits the viewport; no horizontal overflow; dark SOC styling, numbered cards, no animations added |
 
 ## Known limitations (not claimed)
 
 1. **"Any API" is not proven universally.** Verified against the lab, one API-key API, one Bearer API, one Basic-auth API, one custom-header API, one public API, and one non-JSON/error API — all through the web layer end to end. No external live API has been tested.
-2. **No crawling / no unauthenticated discovery.** Without a supplied document or list, only the safe default `/api/public` is probed. This is deliberate, not a gap in intent.
-3. **CORS capability is tied to a configured identity** in the current engine (credentialed check); without an identity it is skipped with a reason rather than run anonymously.
+2. **No crawling / no guessed paths.** URL-only checks assess only the supplied path (or `/` for a bare domain). API route discovery requires a supplied specification or endpoint list.
+3. **Authentication comparison** needs credentials and documented protected endpoints; it is skipped with a reason when those inputs are absent. CORS can be checked anonymously, but header observations alone do not prove browser exploitability.
 4. **Basic-auth usernames/passwords must not contain whitespace** (inherited `read_token` constraint).
 5. **`failed` status path** is exercised by unit tests (stub engine / monkeypatched cleanup), not observed against a live module that crashes mid-run.
 6. **Visual review** was done live in the interactive preview at 1440×1000. Not re-checked on browsers other than Chrome.
@@ -114,7 +116,7 @@ Both runs exercised the collapsed-by-default Advanced panel (expanded before fil
 2. Form resilience: clean draft defaults properly restored for BOLA and bounded rate sampling so multi-user testing runs out of the box when credentials are supplied.
 3. Spec loading: validated OpenAPI JSON loading, sample specification loading, and fetch-from-URL capabilities intact.
 4. Next optional enhancements:
-   - Optionally make the credentialed CORS check runnable anonymously (bounded, GET-only) when no identity is supplied.
+   - Keep URL-only assessments bounded to the supplied route; broader route discovery requires explicit documentation or endpoints.
    - Browser-exercise edge case states (empty-history, failed, cancelled, missing-artifact).
 
 ## EXACT NEXT STEP

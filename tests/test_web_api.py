@@ -90,7 +90,7 @@ def test_session_endpoint_reveals_a_per_run_token(api):
     ({"tests": ["not_a_test"], "target": "http://127.0.0.1:5000"}, "unknown assessment test"),
     ({"tests": ["headers_analysis"], "target": "https://api.example.com"}, "authorization"),
     ({"tests": ["headers_analysis"], "target": "http://api.example.com", "authorized": True}, "HTTPS"),
-    ({"tests": ["headers_analysis"], "target": "http://127.0.0.1:5000/x"}, "optional port"),
+    ({"tests": ["headers_analysis"], "target": "http://127.0.0.1:5000/?token=secret"}, "query"),
     ({"tests": ["rate_limit"], "target": "http://127.0.0.1:5000"}, "path and bounded sample"),
     ({"tests": ["rate_limit"], "target": "http://127.0.0.1:5000",
       "rate_limit": {"path": "/api/limited", "count": 50}}, "between"),
@@ -285,4 +285,3 @@ def test_openapi_sample_and_fetch(api, lab):
                           headers=session_headers(app))
     assert fetched.status_code == 200
     assert "paths" in fetched.get_json()["content"]
-

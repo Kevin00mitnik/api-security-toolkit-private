@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import requests
 import yaml
 
+from core.http_client import validate_path
 from main import ASSESSMENT_TESTS
 
 MAX_TOKEN = 16000          # matches read_token() in main.py
@@ -29,7 +30,7 @@ IDENTITY_SCHEMES = ("bearer", "api_key", "basic", "header")
 # traffic to the target, which the UI should state plainly.
 TEST_CATALOGUE = (
     {"key": "endpoint_discovery", "label": "Endpoint Discovery", "requests": False,
-     "description": "Reads the supplied OpenAPI document or endpoint list. Never crawls or guesses paths."},
+     "description": "Reads supplied OpenAPI/endpoints or the single URL path. Never crawls or guesses paths."},
     {"key": "openapi_analysis", "label": "OpenAPI Analysis", "requests": False,
      "description": "Validates a local Swagger 2 / OpenAPI 3.0-3.1 JSON document and reports operations that allow anonymous access."},
     {"key": "parameter_discovery", "label": "Parameter Discovery", "requests": False,
@@ -45,7 +46,7 @@ TEST_CATALOGUE = (
     {"key": "headers_analysis", "label": "Security Headers", "requests": True,
      "description": "Checks context-relevant response headers on observed responses."},
     {"key": "cors_analysis", "label": "CORS", "requests": True,
-     "description": "Sends one synthetic untrusted Origin. Header observations are not browser proof."},
+     "description": "Tests one synthetic untrusted Origin anonymously. Header observations are not browser proof."},
     {"key": "rate_limit", "label": "Rate Limiting", "requests": True,
      "description": "Small bounded sample (max 10 requests, at least 0.2s apart). Stops at the first 429, 5xx or error."},
 )
@@ -118,20 +119,26 @@ def _validate_number(value, name, low, high, cast=float):
 def _validate_target(payload):
     target = payload.get("target")
     if target in (None, ""):
-        return None, False
+        return None, False, None
     target = _require_text(target, "target", 2000)
     parsed = urlsplit(target)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError("target must be an http:// or https:// origin")
-    if parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
-        raise ValueError("target must be the scheme, host and optional port only; put paths in the endpoint list")
+        raise ValueError("target must be an http:// or https:// URL")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("target URL cannot contain credentials, a query, or a fragment")
+    target_path = parsed.path or "/"
+    try:
+        validate_path(target_path)
+    except ValueError as error:
+        raise ValueError("target URL path is invalid: " + str(error)) from None
     authorized = bool(payload.get("authorized", False))
     if not _is_loopback(parsed.hostname):
         if not authorized:
             raise ValueError("non-loopback targets require explicit authorization confirmation")
         if parsed.scheme != "https":
             raise ValueError("non-loopback targets require HTTPS")
-    return target.rstrip("/"), authorized
+    origin = parsed.scheme + "://" + parsed.netloc
+    return origin, authorized, target_path
 
 
 def _validate_tests(payload):
@@ -351,7 +358,7 @@ def validate_start(payload):
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
 
-    target, authorized = _validate_target(payload)
+    target, authorized, target_path = _validate_target(payload)
     tests = _validate_tests(payload)
     identities = _validate_identities(payload)
 
@@ -361,6 +368,12 @@ def validate_start(payload):
     endpoints_text = payload.get("endpoints_text")
     if endpoints_text is not None:
         endpoints_text = _validate_endpoints_spec(endpoints_text)
+    if target_path not in (None, "/"):
+        if openapi_text is not None or endpoints_text is not None:
+            raise ValueError("Use an origin-only target when supplying an OpenAPI document or endpoint list")
+        endpoints_text = json.dumps([{"path": target_path, "method": "GET"}])
+    elif target is not None and openapi_text is None and endpoints_text is None:
+        endpoints_text = json.dumps([{"path": "/", "method": "GET"}])
     if target is None and openapi_text is None and endpoints_text is None:
         raise ValueError("provide a target, an OpenAPI document or an endpoint list")
 

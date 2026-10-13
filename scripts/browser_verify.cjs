@@ -99,6 +99,7 @@ const path = require("node:path");
     if (!(await targetInput.inputValue())) {
       await targetInput.fill("http://127.0.0.1:5000");
     }
+    await page.getByRole("button", { name: "Bearer", exact: true }).click();
     await page
       .getByLabel("Primary credential", { exact: true })
       .fill(tokens.alice);
